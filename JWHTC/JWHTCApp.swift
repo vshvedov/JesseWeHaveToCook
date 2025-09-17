@@ -15,7 +15,7 @@ struct JWHTCApp: App {
         MenuBarExtra {
             PresenceMenu()
         } label: {
-            Image(systemName: (keeper.keepAwake || keeper.appearActive) ? "bolt.fill" : "bolt.slash")
+            Image(systemName: (keeper.keepAwake || keeper.appearActive) ? "flask.fill" : "flask")
         }
 
         Window("Settings", id: "settings") {

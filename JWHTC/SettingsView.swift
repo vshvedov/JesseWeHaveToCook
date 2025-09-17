@@ -18,7 +18,12 @@ struct SettingsView: View {
             // Content
             VStack(spacing: 20) {
                 // App Info Section (moved to top)
-                VStack(spacing: 6) {
+                VStack(spacing: 8) {
+                    Image(systemName: "flask.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(.white)
+                        .padding(.bottom, 4)
+
                     Text("Jesse, We Have To Cook!")
                         .font(.headline)
 
@@ -143,7 +148,7 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 420, height: 380)
+        .frame(width: 420, height: 420)
         .fixedSize()
     }
 
