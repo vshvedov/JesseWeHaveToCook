@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		4BFB65102E7B184E00671D11 /* IOKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 4BFB650F2E7B184E00671D11 /* IOKit.framework */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		4BFB65002E7B16F800671D11 /* JWHTC.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = JWHTC.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		4BFB650F2E7B184E00671D11 /* IOKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = IOKit.framework; path = System/Library/Frameworks/IOKit.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -23,6 +28,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				4BFB65102E7B184E00671D11 /* IOKit.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -33,6 +39,7 @@
 			isa = PBXGroup;
 			children = (
 				4BFB65022E7B16F800671D11 /* JWHTC */,
+				4BFB650E2E7B184D00671D11 /* Frameworks */,
 				4BFB65012E7B16F800671D11 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +50,14 @@
 				4BFB65002E7B16F800671D11 /* JWHTC.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		4BFB650E2E7B184D00671D11 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				4BFB650F2E7B184E00671D11 /* IOKit.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -255,6 +270,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -285,6 +301,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSUIElement = YES;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",

@@ -2,7 +2,7 @@
 //  ContentView.swift
 //  JWHTC
 //
-//  Created by vsh on 2025-09-17.
+//  Created by Vladyslav Shvedov on 2025-09-17.
 //
 
 import SwiftUI

@@ -1,3 +1,11 @@
+//
+//  PresenceMenu.swift
+//  JWHTC
+//
+//  Created by Vladyslav Shvedov on 2025-09-17.
+//
+
+
 import SwiftUI
 
 struct PresenceMenu: View {
@@ -5,12 +13,12 @@ struct PresenceMenu: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Toggle("Keep Mac awake (no idle sleep)", isOn: Binding(
+            Toggle("Keep Awake", isOn: Binding(
                 get: { keeper.keepAwake },
                 set: { keeper.setKeepAwake($0) }
             ))
 
-            Toggle("Appear active (power mgmt pulse)", isOn: Binding(
+            Toggle("Keep Active", isOn: Binding(
                 get: { keeper.appearActive },
                 set: { keeper.setAppearActive($0) }
             ))
@@ -28,7 +36,7 @@ struct PresenceMenu: View {
 
             Divider()
 
-            Button("Quit PresencePilot") {
+            Button("Stop cooking, Jesse!") {
                 NSApplication.shared.terminate(nil)
             }
         }
