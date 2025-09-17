@@ -10,37 +10,41 @@ import SwiftUI
 
 struct PresenceMenu: View {
     @ObservedObject var keeper = ActivityKeeper.shared
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 0) {
             Toggle("Keep Awake", isOn: Binding(
                 get: { keeper.keepAwake },
                 set: { keeper.setKeepAwake($0) }
             ))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
 
             Toggle("Keep Active", isOn: Binding(
                 get: { keeper.appearActive },
                 set: { keeper.setAppearActive($0) }
             ))
-
-            HStack {
-                Text("Pulse interval")
-                Spacer()
-                Text("\(Int(keeper.pulseInterval))s")
-                    .foregroundStyle(.secondary)
-            }
-            Slider(value: Binding(
-                get: { keeper.pulseInterval },
-                set: { keeper.setPulseInterval($0) }
-            ), in: 5...180, step: 5)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
 
             Divider()
+                .padding(.vertical, 4)
 
-            Button("Stop cooking, Jesse!") {
-                NSApplication.shared.terminate(nil)
+            Button(action: {
+                openWindow(id: "settings")
+            }) {
+                Label("Settings...", systemImage: "gearshape")
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+
+            Button(action: { NSApplication.shared.terminate(nil) }) {
+                Label("Stop cooking, Jesse!", systemImage: "power")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
         }
-        .padding(12)
-        .frame(width: 320)
+        .frame(width: 250)
     }
 }
