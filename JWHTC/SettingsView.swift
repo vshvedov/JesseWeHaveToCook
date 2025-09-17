@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var keeper = ActivityKeeper.shared
+    @StateObject private var launchAtLogin = LaunchAtLogin.shared
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
 
@@ -55,40 +56,58 @@ struct SettingsView: View {
                 Divider()
                     .padding(.horizontal, 20)
 
-                // Activity Pulse Section (moved to bottom)
-                VStack(alignment: .leading, spacing: 12) {
-                    Text("Activity Pulse Interval")
-                        .font(.headline)
+                // Settings Section
+                VStack(alignment: .leading, spacing: 16) {
+                    // Launch at Login
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("General")
+                            .font(.headline)
 
-                    Text("How often to send activity signals when 'Keep Active' is enabled")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-
-                    HStack {
-                        Text("5s")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-
-                        Slider(
-                            value: Binding(
-                                get: { keeper.pulseInterval },
-                                set: { keeper.setPulseInterval($0) }
-                            ),
-                            in: 5...180,
-                            step: 5
-                        )
-
-                        Text("3m")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
+                        HStack {
+                            Toggle("Launch at login", isOn: Binding(
+                                get: { launchAtLogin.isEnabled },
+                                set: { _ in launchAtLogin.toggle() }
+                            ))
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                        }
                     }
 
-                    HStack {
-                        Text("Current interval:")
-                        Spacer()
-                        Text(formatInterval(keeper.pulseInterval))
+                    // Activity Pulse Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Activity Pulse Interval")
+                            .font(.headline)
+
+                        Text("How often to send activity signals when 'Keep Active' is enabled")
+                            .font(.caption)
                             .foregroundStyle(.secondary)
-                            .monospacedDigit()
+
+                        HStack {
+                            Text("5s")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Slider(
+                                value: Binding(
+                                    get: { keeper.pulseInterval },
+                                    set: { keeper.setPulseInterval($0) }
+                                ),
+                                in: 5...180,
+                                step: 5
+                            )
+
+                            Text("3m")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Text("Current interval:")
+                            Spacer()
+                            Text(formatInterval(keeper.pulseInterval))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -124,7 +143,7 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 420, height: 320)
+        .frame(width: 420, height: 380)
         .fixedSize()
     }
 
