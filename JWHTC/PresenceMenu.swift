@@ -14,19 +14,13 @@ struct PresenceMenu: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Toggle("Keep Awake", isOn: Binding(
-                get: { keeper.keepAwake },
-                set: { keeper.setKeepAwake($0) }
+            Toggle("Stay Active", isOn: Binding(
+                get: { keeper.stayActive },
+                set: { keeper.setStayActive($0) }
             ))
             .padding(.horizontal, 12)
-            .padding(.vertical, 4)
-
-            Toggle("Keep Active", isOn: Binding(
-                get: { keeper.appearActive },
-                set: { keeper.setAppearActive($0) }
-            ))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 4)
+            .padding(.vertical, 6)
+            .help("Prevents sleep, screensaver and keeps you active.")
 
             Divider()
                 .padding(.vertical, 4)

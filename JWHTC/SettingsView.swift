@@ -21,17 +21,17 @@ struct SettingsView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "flask.fill")
                         .font(.system(size: 32))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .padding(.bottom, 4)
 
                     Text("Jesse, We Have To Cook!")
                         .font(.headline)
 
-                    Text("Version 1.1")
+                    Text("Version 1.2")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
 
-                    Text("Made by Vladyslav Shvedov")
+                    Text("Made with 🍵 by Vladyslav Shvedov")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .padding(.top, 2)

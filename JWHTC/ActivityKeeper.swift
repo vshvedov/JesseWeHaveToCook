@@ -13,10 +13,9 @@ import IOKit.pwr_mgt
 final class ActivityKeeper: ObservableObject {
     static let shared = ActivityKeeper()
 
-    // UI state
-    @Published var keepAwake = true
-    @Published var appearActive = true
-    @Published var pulseInterval: TimeInterval = 30
+    // UI state - single combined option
+    @Published var stayActive = true
+    @Published var pulseInterval: TimeInterval = 20
 
     // Internals
     private var idleSleepAssertion: IOPMAssertionID = 0
@@ -26,26 +25,46 @@ final class ActivityKeeper: ObservableObject {
     private var timer: Timer?
 
     private init() {
-        // Start with keep awake enabled by default
+        // Start with stay active enabled by default
         Task { @MainActor in
-            setKeepAwake(true)
+            setStayActive(true)
         }
     }
 
-    // MARK: - Keep-awake (no idle sleep + no display sleep/screensaver)
-    func setKeepAwake(_ enabled: Bool) {
-        keepAwake = enabled
-        enabled ? beginNoSleep() : endNoSleep()
+    // MARK: - Stay Active (prevents sleep, screensaver, and app inactivity)
+    func setStayActive(_ enabled: Bool) {
+        stayActive = enabled
+        if enabled {
+            beginStayActive()
+        } else {
+            endStayActive()
+        }
+    }
+
+    private func beginStayActive() {
+        print("[ActivityKeeper] Starting stay-active mode")
+
+        // Start all protection mechanisms
+        beginNoSleep()
+        startUserActivityTimer()
+    }
+
+    private func endStayActive() {
+        print("[ActivityKeeper] Ending stay-active mode")
+
+        // Stop all protection mechanisms
+        endNoSleep()
+        stopUserActivityTimer()
     }
 
     private func beginNoSleep() {
-        print("[ActivityKeeper] Starting keep-awake mode")
+        print("[ActivityKeeper] Starting sleep prevention")
 
         if processActivity == nil {
             // Prevents both system idle sleep and display sleep
             processActivity = ProcessInfo.processInfo.beginActivity(
-                options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled, .automaticTerminationDisabled, .suddenTerminationDisabled],
-                reason: "JWHTC: Keep display awake"
+                options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled, .automaticTerminationDisabled, .suddenTerminationDisabled, .userInitiated],
+                reason: "JWHTC: Keep system active"
             )
             print("[ActivityKeeper] ProcessInfo activity started")
         }
@@ -80,7 +99,7 @@ final class ActivityKeeper: ObservableObject {
             }
         }
 
-        // Additional assertion specifically for preventing screensaver
+        // Additional assertion specifically for preventing screensaver and user idle
         if userIdleAssertion == 0 {
             let reason = "JWHTC: Prevent user idle (screensaver)" as CFString
             let res = IOPMAssertionCreateWithName(
@@ -98,7 +117,7 @@ final class ActivityKeeper: ObservableObject {
     }
 
     private func endNoSleep() {
-        print("[ActivityKeeper] Ending keep-awake mode")
+        print("[ActivityKeeper] Ending sleep prevention")
 
         if let act = processActivity {
             ProcessInfo.processInfo.endActivity(act)
@@ -122,26 +141,29 @@ final class ActivityKeeper: ObservableObject {
         }
     }
 
-    // MARK: - “Appear active” without keystrokes/mouse movement
-    func setAppearActive(_ enabled: Bool) {
-        appearActive = enabled
-        enabled ? startUserActivityTimer() : stopUserActivityTimer()
-    }
-
+    // MARK: - Pulse interval control
     func setPulseInterval(_ seconds: TimeInterval) {
         pulseInterval = max(5, seconds) // safety floor
-        if timer != nil { startUserActivityTimer() }
+        if timer != nil && stayActive {
+            startUserActivityTimer()
+        }
     }
 
     private func startUserActivityTimer() {
         stopUserActivityTimer()
         pulseUserActivity() // fire immediately
-        timer = Timer.scheduledTimer(withTimeInterval: pulseInterval, repeats: true) { [weak self] _ in
-            self?.pulseUserActivity()
+
+        // Create timer with shorter interval for better detection
+        let effectiveInterval = min(pulseInterval, 10)
+        timer = Timer.scheduledTimer(withTimeInterval: effectiveInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor in
+                self?.pulseUserActivity()
+            }
         }
         if let t = timer {
             RunLoop.main.add(t, forMode: .common)
         }
+        print("[ActivityKeeper] Activity timer started with interval: \(effectiveInterval)s")
     }
 
     private func stopUserActivityTimer() {
@@ -157,25 +179,60 @@ final class ActivityKeeper: ObservableObject {
     }
 
     private func pulseUserActivity() {
-        // Resets idle timer
-        var id = IOPMAssertionID(0)
-        let r = IOPMAssertionDeclareUserActivity(
+        // Send multiple types of activity signals for maximum compatibility
+
+        // 1. Declare user activity
+        // Using both local and remote flags
+        var activityID = IOPMAssertionID(0)
+        let userActivityOptions = IOPMUserActiveType(kIOPMUserActiveLocal.rawValue | kIOPMUserActiveRemote.rawValue)
+        let activityResult = IOPMAssertionDeclareUserActivity(
             "JWHTC: User active pulse" as CFString,
-            kIOPMUserActiveLocal,
-            &id
+            userActivityOptions,
+            &activityID
         )
-        if r == kIOReturnSuccess, id != 0 {
-            print("[ActivityKeeper] Activity pulse sent (ID: \(id))")
-            _ = IOPMAssertionRelease(id) // release immediately
+
+        if activityResult == kIOReturnSuccess, activityID != 0 {
+            print("[ActivityKeeper] User activity pulse sent (ID: \(activityID))")
+            // Keep assertion for a brief moment to ensure it registers
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                _ = IOPMAssertionRelease(activityID)
+            }
         } else {
-            print("[ActivityKeeper] Activity pulse failed: \(r)")
+            print("[ActivityKeeper] User activity pulse failed: \(activityResult)")
+        }
+
+        // 2. Create a temporary PreventUserIdleSystemSleep assertion
+        // This tells the system the user is actively using the machine
+        var tempUserAssertion = IOPMAssertionID(0)
+        let tempResult = IOPMAssertionCreateWithName(
+            kIOPMAssertPreventUserIdleSystemSleep as CFString,
+            IOPMAssertionLevel(kIOPMAssertionLevelOn),
+            "JWHTC: Temporary activity" as CFString,
+            &tempUserAssertion
+        )
+
+        if tempResult == kIOReturnSuccess, tempUserAssertion != 0 {
+            // Hold for half a second then release
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                _ = IOPMAssertionRelease(tempUserAssertion)
+            }
+        }
+
+        // 3. Briefly toggle the process activity to signal we're still active
+        // This helps with some apps that monitor process activity
+        if processActivity != nil {
+            if let act = processActivity {
+                ProcessInfo.processInfo.endActivity(act)
+                processActivity = ProcessInfo.processInfo.beginActivity(
+                    options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled, .userInitiated, .latencyCritical],
+                    reason: "JWHTC: Keep system active"
+                )
+            }
         }
     }
 
     deinit {
-        Task { @MainActor in
-            endNoSleep()
-            stopUserActivityTimer()
-        }
+        // Cleanup happens automatically when app terminates
+        // Assertions are released by the system
     }
 }
