@@ -4,9 +4,11 @@ Lightweight and modern macOS app that keeps your Mac awake and makes screensaver
 
 ## Why?
 
-1. Easily accessible control over activity and screensaver
-2. Small memory and storage footprint
-3. Modern look and minimalistic K.I.S.S. ideology
+1. Easily accessible control over activity and screensaver in macOS
+2. Open source
+3. No tracking, no ads, free forever
+4. Small memory, CPU and storage footprint
+5. Modern look and minimalistic K.I.S.S. ideology
 
 ## Screenshots
 
@@ -22,7 +24,6 @@ Lightweight and modern macOS app that keeps your Mac awake and makes screensaver
 
 ## Download & Install
 
-### Option 1: Download Pre-built App
 Check the [Releases](https://github.com/vshvedov/JesseWeHaveToCook/releases) page for the latest version.
 
 **First time opening:**
@@ -30,7 +31,9 @@ Check the [Releases](https://github.com/vshvedov/JesseWeHaveToCook/releases) pag
 2. Right-click the app and select "Open"
 3. Click "Open" when macOS warns about an unidentified developer
 
-As this is a self-signed macOS app, you may need to allow it from the Privacy Settings. Alternatively, you can build the app from the sources yourself.
+```
+As this is a self-signed macOS app, you may need to manually allow it from the Privacy Settings. Alternatively, you can build the app from the sources yourself.
+```
 
 ## System Requirements
 
