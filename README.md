@@ -12,6 +12,18 @@ JWHTC sits in your menu bar (look for the flask icon ⚗️) and helps you:
 
 Perfect for those long video calls, presentations, or when you just need to step away without going "idle."
 
+## Screenshots
+
+<div align="center">
+
+### Menu Bar Interface
+![Menu Bar Interface](screenshots/jwhtc_screen_01.png)
+
+### Settings Window
+![Settings Window](screenshots/jwhtc_screen_02.png)
+
+</div>
+
 ## Download & Install
 
 ### Option 1: Download Pre-built App
