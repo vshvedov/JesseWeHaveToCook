@@ -1,6 +1,6 @@
 # Jesse, We Have To Cook! 🧪
 
-Keep your Mac awake and stay active in Slack, Teams, and other apps. A simple menu bar utility inspired by everyone's favorite chemistry teacher.
+Keep your Mac awake and stay active in Slack, Teams, and other apps. A simple menu bar utility inspired by everyone's favorite chemistry teacher. Simple, minimalistic, lightweight.
 
 ## What It Does
 
