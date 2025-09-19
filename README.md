@@ -32,7 +32,9 @@ Check the [Releases](https://github.com/vshvedov/JesseWeHaveToCook/releases) pag
 3. Click "Open" when macOS warns about an unidentified developer
 
 ```
-As this is a self-signed macOS app, you may need to manually allow it from the Privacy Settings. Alternatively, you can build the app from the sources yourself.
+As this is a self-signed macOS app, you may need to 
+manually allow it from the Privacy Settings. 
+Alternatively, you can build the app from the sources yourself.
 ```
 
 ## System Requirements
