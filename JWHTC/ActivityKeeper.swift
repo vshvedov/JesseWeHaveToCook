@@ -8,6 +8,7 @@
 import Foundation
 import Combine
 import IOKit.pwr_mgt
+import CoreGraphics
 
 @MainActor
 final class ActivityKeeper: ObservableObject {
@@ -181,7 +182,35 @@ final class ActivityKeeper: ObservableObject {
     private func pulseUserActivity() {
         // Send multiple types of activity signals for maximum compatibility
 
-        // 1. Declare user activity
+        // 1. Simulate minimal mouse movement to trigger user activity
+        // This is what Slack actually needs - real input events
+        if let currentEvent = CGEvent(source: nil) {
+            let currentLocation = currentEvent.location
+
+            // Create a tiny mouse movement (1 pixel right, then back)
+            // This is imperceptible to the user but registers as activity
+            let moveRight = CGEvent(mouseEventSource: nil,
+                                   mouseType: .mouseMoved,
+                                   mouseCursorPosition: CGPoint(x: currentLocation.x + 1, y: currentLocation.y),
+                                   mouseButton: .left)
+
+            let moveBack = CGEvent(mouseEventSource: nil,
+                                 mouseType: .mouseMoved,
+                                 mouseCursorPosition: currentLocation,
+                                 mouseButton: .left)
+
+            // Post the events to simulate actual mouse movement
+            moveRight?.post(tap: .cghidEventTap)
+
+            // Small delay to ensure the movement registers
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
+                moveBack?.post(tap: .cghidEventTap)
+            }
+
+            print("[ActivityKeeper] Mouse movement pulse sent")
+        }
+
+        // 2. Declare user activity
         // Using both local and remote flags
         var activityID = IOPMAssertionID(0)
         let userActivityOptions = IOPMUserActiveType(kIOPMUserActiveLocal.rawValue | kIOPMUserActiveRemote.rawValue)
@@ -201,7 +230,7 @@ final class ActivityKeeper: ObservableObject {
             print("[ActivityKeeper] User activity pulse failed: \(activityResult)")
         }
 
-        // 2. Create a temporary PreventUserIdleSystemSleep assertion
+        // 3. Create a temporary PreventUserIdleSystemSleep assertion
         // This tells the system the user is actively using the machine
         var tempUserAssertion = IOPMAssertionID(0)
         let tempResult = IOPMAssertionCreateWithName(
@@ -218,7 +247,7 @@ final class ActivityKeeper: ObservableObject {
             }
         }
 
-        // 3. Briefly toggle the process activity to signal we're still active
+        // 4. Briefly toggle the process activity to signal we're still active
         // This helps with some apps that monitor process activity
         if processActivity != nil {
             if let act = processActivity {
