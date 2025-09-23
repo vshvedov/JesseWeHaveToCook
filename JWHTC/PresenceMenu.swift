@@ -26,6 +26,7 @@ struct PresenceMenu: View {
                 .padding(.vertical, 4)
 
             Button(action: {
+                NSApp.activate(ignoringOtherApps: true)
                 openWindow(id: "settings")
             }) {
                 Label("Settings...", systemImage: "gearshape")

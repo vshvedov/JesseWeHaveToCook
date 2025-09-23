@@ -20,7 +20,17 @@ struct JWHTCApp: App {
 
         Window("Settings", id: "settings") {
             SettingsView()
+                .onAppear {
+                    // Ensure the settings window appears on top
+                    NSApp.activate(ignoringOtherApps: true)
+                    if let window = NSApp.windows.first(where: { $0.title == "Settings" }) {
+                        window.level = .floating
+                        window.makeKeyAndOrderFront(nil)
+                        window.orderFrontRegardless()
+                    }
+                }
         }
         .windowResizability(.contentSize)
+        .defaultPosition(.center)
     }
 }
