@@ -6,7 +6,7 @@ Lightweight and modern macOS app that keeps your Mac awake and makes screensaver
 
 1. Easily accessible control over activity and screensaver in macOS
 2. Open source
-3. No tracking, no ads, free forever
+3. No tracking, no network activity, no ads, free forever
 4. Small memory, CPU and storage footprint
 5. Modern look and minimalistic K.I.S.S. ideology
 
