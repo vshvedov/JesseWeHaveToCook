@@ -25,7 +25,7 @@ xcodebuild -project JWHTC.xcodeproj \
     CODE_SIGN_IDENTITY="-" \
     CODE_SIGNING_REQUIRED=NO \
     CODE_SIGNING_ALLOWED=YES \
-    DEVELOPMENT_TEAM="" \
+    DEVELOPMENT_TEAM="Vladyslav Shvedov" \
     AD_HOC_CODE_SIGNING_ALLOWED=YES \
     build
 
@@ -41,13 +41,20 @@ if [ ! -d "$APP_PATH" ]; then
     exit 1
 fi
 
-# Ad-hoc sign the app
+# Ad-hoc sign the app with hardened runtime and timestamp
 echo -e "${YELLOW}Ad-hoc signing the app...${NC}"
-codesign --force --deep --sign - "$APP_PATH"
+codesign --force --deep --sign - \
+    --options runtime \
+    --timestamp \
+    "$APP_PATH"
 
 # Verify the signature
 echo -e "${YELLOW}Verifying signature...${NC}"
-codesign --verify --verbose "$APP_PATH"
+codesign --verify --verbose --deep --strict "$APP_PATH"
+
+# Check Gatekeeper acceptance
+echo -e "${YELLOW}Checking Gatekeeper assessment...${NC}"
+spctl -a -vv "$APP_PATH" 2>&1 || echo -e "${YELLOW}Note: App will require user override on first launch${NC}"
 
 # Create README.txt
 echo -e "${YELLOW}Creating README.txt...${NC}"
@@ -74,6 +81,12 @@ Method 2 - If the app is blocked:
 3. Look for a message about JWHTC being blocked
 4. Click "Open Anyway"
 5. Confirm by clicking "Open" in the dialog
+
+Method 3 - Remove quarantine attribute (Terminal):
+1. Open Terminal
+2. Navigate to where you unzipped the app
+3. Run: xattr -cr JWHTC.app
+4. Now double-click the app to open normally
 
 USING THE APP
 -------------
