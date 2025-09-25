@@ -15,19 +15,23 @@ struct JWHTCApp: App {
         MenuBarExtra {
             PresenceMenu()
         } label: {
-            if !keeper.stayActive {
-                // Inactive state - crossed flask
-                ZStack {
+            HStack(spacing: 4) {
+                if !keeper.stayActive {
+                    // Inactive state - crossed flask
+                    ZStack {
+                        Image(systemName: "flask")
+                        Image(systemName: "xmark")
+                            .font(.system(size: 10, weight: .bold))
+                    }
+                } else if keeper.isCurrentlyPulsing {
+                    // Actively pulsing - filled flask with timer
+                    Image(systemName: "flask.fill")
+                    Text(keeper.inactivityDurationString)
+                        .font(.system(size: 11, design: .monospaced))
+                } else {
+                    // Active but waiting for inactivity - empty flask
                     Image(systemName: "flask")
-                    Image(systemName: "xmark")
-                        .font(.system(size: 10, weight: .bold))
                 }
-            } else if keeper.isCurrentlyPulsing {
-                // Actively pulsing - filled flask
-                Image(systemName: "flask.fill")
-            } else {
-                // Active but waiting for inactivity - empty flask
-                Image(systemName: "flask")
             }
         }
 

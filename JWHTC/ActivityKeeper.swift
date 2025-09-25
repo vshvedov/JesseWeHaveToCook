@@ -21,6 +21,7 @@ final class ActivityKeeper: ObservableObject {
     @Published var pulseInterval: TimeInterval = 20
     @Published var inactivityThreshold: TimeInterval = 300 // 5 minutes default
     @Published var isCurrentlyPulsing = false // tracks if we're actively pulsing due to inactivity
+    @Published var pulsingStartTime: Date? = nil // tracks when we started pulsing
 
     // Internals
     private var idleSleepAssertion: IOPMAssertionID = 0
@@ -30,6 +31,7 @@ final class ActivityKeeper: ObservableObject {
     private var pulseTimer: Timer?
     private var inactivityCheckTimer: Timer?
     private var lastActivityTime: Date = Date()
+    private var displayUpdateTimer: Timer?
 
     private init() {
         // Start with stay active disabled by default
@@ -65,6 +67,8 @@ final class ActivityKeeper: ObservableObject {
         stopInactivityMonitoring()
         stopPulseTimer()
         isCurrentlyPulsing = false
+        pulsingStartTime = nil
+        stopDisplayUpdateTimer()
     }
 
     private func beginNoSleep() {
@@ -215,6 +219,8 @@ final class ActivityKeeper: ObservableObject {
                 print("[ActivityKeeper] User activity detected (idle: \(minIdleTime)s), stopping pulses")
                 stopPulseTimer()
                 isCurrentlyPulsing = false
+                pulsingStartTime = nil
+                stopDisplayUpdateTimer()
             }
         } else {
             // Check if we've been idle long enough
@@ -222,7 +228,9 @@ final class ActivityKeeper: ObservableObject {
             if timeSinceLastActivity >= inactivityThreshold && !isCurrentlyPulsing && stayActive {
                 print("[ActivityKeeper] Inactivity threshold reached (\(inactivityThreshold)s), starting pulses")
                 isCurrentlyPulsing = true
+                pulsingStartTime = Date()
                 startPulseTimer()
+                startDisplayUpdateTimer()
             }
         }
     }
@@ -314,6 +322,44 @@ final class ActivityKeeper: ObservableObject {
             )
             print("[ActivityKeeper] ProcessInfo activity refreshed")
         }
+    }
+
+    // MARK: - Display Update Timer
+    private func startDisplayUpdateTimer() {
+        stopDisplayUpdateTimer()
+        displayUpdateTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                // Just trigger a UI update by changing the published property
+                self?.objectWillChange.send()
+            }
+        }
+        if let t = displayUpdateTimer {
+            RunLoop.main.add(t, forMode: .common)
+        }
+    }
+
+    private func stopDisplayUpdateTimer() {
+        if Thread.isMainThread {
+            displayUpdateTimer?.invalidate()
+            displayUpdateTimer = nil
+        } else {
+            DispatchQueue.main.sync {
+                self.displayUpdateTimer?.invalidate()
+                self.displayUpdateTimer = nil
+            }
+        }
+    }
+
+    // Computed property for formatted inactivity duration
+    var inactivityDurationString: String {
+        guard let startTime = pulsingStartTime else { return "" }
+
+        let duration = Date().timeIntervalSince(startTime)
+        let hours = Int(duration) / 3600
+        let minutes = (Int(duration) % 3600) / 60
+        let seconds = Int(duration) % 60
+
+        return String(format: "%02d:%02d:%02d", hours, minutes, seconds)
     }
 
     deinit {
