@@ -9,6 +9,7 @@ import Foundation
 import Combine
 import IOKit.pwr_mgt
 import CoreGraphics
+import AppKit
 
 @MainActor
 final class ActivityKeeper: ObservableObject {
@@ -104,15 +105,15 @@ final class ActivityKeeper: ObservableObject {
         if userIdleAssertion == 0 {
             let reason = "JWHTC: Prevent user idle (screensaver)" as CFString
             let res = IOPMAssertionCreateWithName(
-                kIOPMAssertPreventUserIdleDisplaySleep as CFString,
+                kIOPMAssertPreventUserIdleSystemSleep as CFString,
                 IOPMAssertionLevel(kIOPMAssertionLevelOn),
                 reason,
                 &userIdleAssertion
             )
             if res == kIOReturnSuccess {
-                print("[ActivityKeeper] PreventUserIdleDisplaySleep assertion created: \(userIdleAssertion)")
+                print("[ActivityKeeper] PreventUserIdleSystemSleep assertion created: \(userIdleAssertion)")
             } else {
-                print("[ActivityKeeper] PreventUserIdleDisplaySleep assertion failed: \(res)")
+                print("[ActivityKeeper] PreventUserIdleSystemSleep assertion failed: \(res)")
             }
         }
     }
@@ -137,7 +138,7 @@ final class ActivityKeeper: ObservableObject {
         }
         if userIdleAssertion != 0 {
             let res = IOPMAssertionRelease(userIdleAssertion)
-            print("[ActivityKeeper] PreventUserIdleDisplaySleep assertion released: \(res == kIOReturnSuccess ? "success" : "failed")")
+            print("[ActivityKeeper] PreventUserIdleSystemSleep assertion released: \(res == kIOReturnSuccess ? "success" : "failed")")
             userIdleAssertion = 0
         }
     }
@@ -154,9 +155,8 @@ final class ActivityKeeper: ObservableObject {
         stopUserActivityTimer()
         pulseUserActivity() // fire immediately
 
-        // Create timer with shorter interval for better detection
-        let effectiveInterval = min(pulseInterval, 10)
-        timer = Timer.scheduledTimer(withTimeInterval: effectiveInterval, repeats: true) { [weak self] _ in
+        // Use the actual pulse interval as set by the user
+        timer = Timer.scheduledTimer(withTimeInterval: pulseInterval, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.pulseUserActivity()
             }
@@ -164,7 +164,7 @@ final class ActivityKeeper: ObservableObject {
         if let t = timer {
             RunLoop.main.add(t, forMode: .common)
         }
-        print("[ActivityKeeper] Activity timer started with interval: \(effectiveInterval)s")
+        print("[ActivityKeeper] Activity timer started with interval: \(pulseInterval)s")
     }
 
     private func stopUserActivityTimer() {
@@ -180,83 +180,63 @@ final class ActivityKeeper: ObservableObject {
     }
 
     private func pulseUserActivity() {
-        // Send multiple types of activity signals for maximum compatibility
+        print("[ActivityKeeper] Sending non-intrusive activity pulse...")
 
-        // 1. Simulate minimal mouse movement to trigger user activity
-        // This is what Slack actually needs - real input events
-        if let currentEvent = CGEvent(source: nil) {
-            let currentLocation = currentEvent.location
-
-            // Create a tiny mouse movement (1 pixel right, then back)
-            // This is imperceptible to the user but registers as activity
-            let moveRight = CGEvent(mouseEventSource: nil,
-                                   mouseType: .mouseMoved,
-                                   mouseCursorPosition: CGPoint(x: currentLocation.x + 1, y: currentLocation.y),
-                                   mouseButton: .left)
-
-            let moveBack = CGEvent(mouseEventSource: nil,
-                                 mouseType: .mouseMoved,
-                                 mouseCursorPosition: currentLocation,
-                                 mouseButton: .left)
-
-            // Post the events to simulate actual mouse movement
-            moveRight?.post(tap: .cghidEventTap)
-
-            // Small delay to ensure the movement registers
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) {
-                moveBack?.post(tap: .cghidEventTap)
-            }
-
-            print("[ActivityKeeper] Mouse movement pulse sent")
-        }
-
-        // 2. Declare user activity
-        // Using both local and remote flags
+        // 1. IOPMAssertionDeclareUserActivity - tells the system user is active
+        // This is the primary method that resets idle timers without any input events
         var activityID = IOPMAssertionID(0)
         let userActivityOptions = IOPMUserActiveType(kIOPMUserActiveLocal.rawValue | kIOPMUserActiveRemote.rawValue)
         let activityResult = IOPMAssertionDeclareUserActivity(
-            "JWHTC: User active pulse" as CFString,
+            "JWHTC: Non-intrusive user active pulse" as CFString,
             userActivityOptions,
             &activityID
         )
 
-        if activityResult == kIOReturnSuccess, activityID != 0 {
-            print("[ActivityKeeper] User activity pulse sent (ID: \(activityID))")
-            // Keep assertion for a brief moment to ensure it registers
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                _ = IOPMAssertionRelease(activityID)
+        if activityResult == kIOReturnSuccess && activityID != 0 {
+            print("[ActivityKeeper] User activity declared (ID: \(activityID))")
+            // Hold the assertion longer to ensure apps detect the activity
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                let releaseResult = IOPMAssertionRelease(activityID)
+                if releaseResult != kIOReturnSuccess {
+                    print("[ActivityKeeper] Warning: Failed to release activity ID \(activityID)")
+                }
             }
         } else {
-            print("[ActivityKeeper] User activity pulse failed: \(activityResult)")
+            print("[ActivityKeeper] User activity declaration failed: \(activityResult)")
         }
 
-        // 3. Create a temporary PreventUserIdleSystemSleep assertion
-        // This tells the system the user is actively using the machine
+        // 2. Temporarily create and release a PreventUserIdleSystemSleep assertion
+        // This signals to the system and apps that user activity is happening
         var tempUserAssertion = IOPMAssertionID(0)
         let tempResult = IOPMAssertionCreateWithName(
             kIOPMAssertPreventUserIdleSystemSleep as CFString,
             IOPMAssertionLevel(kIOPMAssertionLevelOn),
-            "JWHTC: Temporary activity" as CFString,
+            "JWHTC: Activity signal" as CFString,
             &tempUserAssertion
         )
 
-        if tempResult == kIOReturnSuccess, tempUserAssertion != 0 {
-            // Hold for half a second then release
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                _ = IOPMAssertionRelease(tempUserAssertion)
+        if tempResult == kIOReturnSuccess && tempUserAssertion != 0 {
+            print("[ActivityKeeper] Temporary idle prevention assertion created")
+            // Hold for 2 seconds then release - this creates a "pulse" of activity
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                let releaseResult = IOPMAssertionRelease(tempUserAssertion)
+                if releaseResult == kIOReturnSuccess {
+                    print("[ActivityKeeper] Temporary assertion released successfully")
+                } else {
+                    print("[ActivityKeeper] Warning: Failed to release temp assertion \(tempUserAssertion)")
+                }
             }
         }
 
-        // 4. Briefly toggle the process activity to signal we're still active
-        // This helps with some apps that monitor process activity
-        if processActivity != nil {
-            if let act = processActivity {
-                ProcessInfo.processInfo.endActivity(act)
-                processActivity = ProcessInfo.processInfo.beginActivity(
-                    options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled, .userInitiated, .latencyCritical],
-                    reason: "JWHTC: Keep system active"
-                )
-            }
+        // 3. Briefly refresh the ProcessInfo activity to signal continued usage
+        // This helps apps that monitor process-level activity states
+        if let currentActivity = processActivity {
+            ProcessInfo.processInfo.endActivity(currentActivity)
+            processActivity = ProcessInfo.processInfo.beginActivity(
+                options: [.idleSystemSleepDisabled, .idleDisplaySleepDisabled, .userInitiated, .latencyCritical],
+                reason: "JWHTC: Activity refresh"
+            )
+            print("[ActivityKeeper] ProcessInfo activity refreshed")
         }
     }
 

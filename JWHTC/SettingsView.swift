@@ -27,7 +27,7 @@ struct SettingsView: View {
                     Text("Jesse, We Have To Cook!")
                         .font(.headline)
 
-                    Text("Version 1.3")
+                    Text("Version 1.3.1")
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
 
