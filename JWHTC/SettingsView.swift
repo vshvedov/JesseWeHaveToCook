@@ -76,6 +76,12 @@ struct SettingsView: View {
                             .toggleStyle(.switch)
                             .controlSize(.small)
                         }
+
+                        HStack {
+                            Toggle("Show timer in menu bar", isOn: $keeper.showTimer)
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                        }
                     }
 
                     // Inactivity Threshold Section
@@ -178,7 +184,8 @@ struct SettingsView: View {
                     .keyboardShortcut(.defaultAction)
                 }
                 .padding(.horizontal, 16)
-                .padding(.top, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 8)
 
                 // Extra spacing below Done button
                 Spacer()
@@ -186,7 +193,7 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 420, height: 520)
+        .frame(width: 420, height: 550)
         .fixedSize()
     }
 

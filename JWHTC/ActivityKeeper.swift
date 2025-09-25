@@ -16,12 +16,37 @@ import Quartz
 final class ActivityKeeper: ObservableObject {
     static let shared = ActivityKeeper()
 
+    // UserDefaults keys
+    private enum DefaultsKeys {
+        static let stayActive = "com.jwhtc.stayActive"
+        static let pulseInterval = "com.jwhtc.pulseInterval"
+        static let inactivityThreshold = "com.jwhtc.inactivityThreshold"
+        static let showTimer = "com.jwhtc.showTimer"
+    }
+
     // UI state - single combined option
-    @Published var stayActive = false
-    @Published var pulseInterval: TimeInterval = 20
-    @Published var inactivityThreshold: TimeInterval = 300 // 5 minutes default
+    @Published var stayActive = true {
+        didSet {
+            UserDefaults.standard.set(stayActive, forKey: DefaultsKeys.stayActive)
+        }
+    }
+    @Published var pulseInterval: TimeInterval = 20 {
+        didSet {
+            UserDefaults.standard.set(pulseInterval, forKey: DefaultsKeys.pulseInterval)
+        }
+    }
+    @Published var inactivityThreshold: TimeInterval = 300 { // 5 minutes default
+        didSet {
+            UserDefaults.standard.set(inactivityThreshold, forKey: DefaultsKeys.inactivityThreshold)
+        }
+    }
     @Published var isCurrentlyPulsing = false // tracks if we're actively pulsing due to inactivity
     @Published var pulsingStartTime: Date? = nil // tracks when we started pulsing
+    @Published var showTimer = true { // show timer in menu bar when pulsing
+        didSet {
+            UserDefaults.standard.set(showTimer, forKey: DefaultsKeys.showTimer)
+        }
+    }
 
     // Internals
     private var idleSleepAssertion: IOPMAssertionID = 0
@@ -34,9 +59,37 @@ final class ActivityKeeper: ObservableObject {
     private var displayUpdateTimer: Timer?
 
     private init() {
-        // Start with stay active disabled by default
+        // Load saved settings or use defaults
+        loadSettings()
+
+        // Apply the loaded/default state
         Task { @MainActor in
-            setStayActive(false)
+            setStayActive(stayActive)
+        }
+    }
+
+    private func loadSettings() {
+        // Load saved settings from UserDefaults
+        if UserDefaults.standard.object(forKey: DefaultsKeys.stayActive) != nil {
+            stayActive = UserDefaults.standard.bool(forKey: DefaultsKeys.stayActive)
+        } else {
+            // First launch - default to true
+            stayActive = true
+        }
+
+        if UserDefaults.standard.object(forKey: DefaultsKeys.pulseInterval) != nil {
+            pulseInterval = UserDefaults.standard.double(forKey: DefaultsKeys.pulseInterval)
+        }
+
+        if UserDefaults.standard.object(forKey: DefaultsKeys.inactivityThreshold) != nil {
+            inactivityThreshold = UserDefaults.standard.double(forKey: DefaultsKeys.inactivityThreshold)
+        }
+
+        if UserDefaults.standard.object(forKey: DefaultsKeys.showTimer) != nil {
+            showTimer = UserDefaults.standard.bool(forKey: DefaultsKeys.showTimer)
+        } else {
+            // Default to showing timer
+            showTimer = true
         }
     }
 

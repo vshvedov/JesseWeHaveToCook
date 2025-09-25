@@ -17,17 +17,21 @@ struct JWHTCApp: App {
         } label: {
             HStack(spacing: 4) {
                 if !keeper.stayActive {
-                    // Inactive state - crossed flask
+                    // Inactive state - use nosign or xmark.circle for disabled state
                     ZStack {
                         Image(systemName: "flask")
-                        Image(systemName: "xmark")
-                            .font(.system(size: 10, weight: .bold))
+                        Image(systemName: "nosign")
+                            .font(.system(size: 16))
                     }
                 } else if keeper.isCurrentlyPulsing {
                     // Actively pulsing - filled flask with timer
                     Image(systemName: "flask.fill")
-                    Text(keeper.inactivityDurationString)
-                        .font(.system(size: 11, design: .monospaced))
+                    if keeper.showTimer {
+                        Text(keeper.inactivityDurationString)
+                            .font(.system(size: 11, design: .monospaced))
+                            .monospacedDigit()
+                            .frame(minWidth: 65, alignment: .leading)
+                    }
                 } else {
                     // Active but waiting for inactivity - empty flask
                     Image(systemName: "flask")
