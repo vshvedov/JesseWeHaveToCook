@@ -78,12 +78,49 @@ struct SettingsView: View {
                         }
                     }
 
+                    // Inactivity Threshold Section
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Inactivity Threshold")
+                            .font(.headline)
+
+                        Text("Start sending activity signals after this period of inactivity")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        HStack {
+                            Text("1m")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+
+                            Slider(
+                                value: Binding(
+                                    get: { keeper.inactivityThreshold / 60 },
+                                    set: { keeper.setInactivityThreshold($0) }
+                                ),
+                                in: 1...15,
+                                step: 1
+                            )
+
+                            Text("15m")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Text("Current threshold:")
+                            Spacer()
+                            Text(formatInterval(keeper.inactivityThreshold))
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                        }
+                    }
+
                     // Activity Pulse Section
                     VStack(alignment: .leading, spacing: 12) {
                         Text("Activity Pulse Interval")
                             .font(.headline)
 
-                        Text("How often to send activity signals when 'Keep Active' is enabled")
+                        Text("How often to send activity signals after inactivity threshold")
                             .font(.caption)
                             .foregroundStyle(.secondary)
 
@@ -125,7 +162,8 @@ struct SettingsView: View {
             VStack(spacing: 0) {
                 HStack {
                     Button("Reset to Default") {
-                        keeper.setPulseInterval(30)
+                        keeper.setPulseInterval(20)
+                        keeper.setInactivityThreshold(5)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.blue)
@@ -144,11 +182,11 @@ struct SettingsView: View {
 
                 // Extra spacing below Done button
                 Spacer()
-                    .frame(height: 16)
+                    .frame(height: 22)
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 420, height: 420)
+        .frame(width: 420, height: 520)
         .fixedSize()
     }
 

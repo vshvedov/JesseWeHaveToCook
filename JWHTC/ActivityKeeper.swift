@@ -10,26 +10,31 @@ import Combine
 import IOKit.pwr_mgt
 import CoreGraphics
 import AppKit
+import Quartz
 
 @MainActor
 final class ActivityKeeper: ObservableObject {
     static let shared = ActivityKeeper()
 
     // UI state - single combined option
-    @Published var stayActive = true
+    @Published var stayActive = false
     @Published var pulseInterval: TimeInterval = 20
+    @Published var inactivityThreshold: TimeInterval = 300 // 5 minutes default
+    @Published var isCurrentlyPulsing = false // tracks if we're actively pulsing due to inactivity
 
     // Internals
     private var idleSleepAssertion: IOPMAssertionID = 0
     private var displaySleepAssertion: IOPMAssertionID = 0
     private var userIdleAssertion: IOPMAssertionID = 0
     private var processActivity: NSObjectProtocol?
-    private var timer: Timer?
+    private var pulseTimer: Timer?
+    private var inactivityCheckTimer: Timer?
+    private var lastActivityTime: Date = Date()
 
     private init() {
-        // Start with stay active enabled by default
+        // Start with stay active disabled by default
         Task { @MainActor in
-            setStayActive(true)
+            setStayActive(false)
         }
     }
 
@@ -46,9 +51,10 @@ final class ActivityKeeper: ObservableObject {
     private func beginStayActive() {
         print("[ActivityKeeper] Starting stay-active mode")
 
-        // Start all protection mechanisms
+        // Start monitoring for inactivity
+        startInactivityMonitoring()
+        // Always prevent sleep when active mode is on
         beginNoSleep()
-        startUserActivityTimer()
     }
 
     private func endStayActive() {
@@ -56,7 +62,9 @@ final class ActivityKeeper: ObservableObject {
 
         // Stop all protection mechanisms
         endNoSleep()
-        stopUserActivityTimer()
+        stopInactivityMonitoring()
+        stopPulseTimer()
+        isCurrentlyPulsing = false
     }
 
     private func beginNoSleep() {
@@ -143,38 +151,106 @@ final class ActivityKeeper: ObservableObject {
         }
     }
 
-    // MARK: - Pulse interval control
+    // MARK: - Configuration controls
     func setPulseInterval(_ seconds: TimeInterval) {
         pulseInterval = max(5, seconds) // safety floor
-        if timer != nil && stayActive {
-            startUserActivityTimer()
+        if pulseTimer != nil && isCurrentlyPulsing {
+            startPulseTimer()
         }
     }
 
-    private func startUserActivityTimer() {
-        stopUserActivityTimer()
+    func setInactivityThreshold(_ minutes: TimeInterval) {
+        inactivityThreshold = minutes * 60 // convert to seconds
+        if stayActive {
+            // Restart monitoring with new threshold
+            stopInactivityMonitoring()
+            startInactivityMonitoring()
+        }
+    }
+
+    // MARK: - Inactivity Monitoring
+    private func startInactivityMonitoring() {
+        stopInactivityMonitoring()
+        lastActivityTime = Date()
+
+        // Check for inactivity every second
+        inactivityCheckTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                self?.checkInactivity()
+            }
+        }
+        if let t = inactivityCheckTimer {
+            RunLoop.main.add(t, forMode: .common)
+        }
+        print("[ActivityKeeper] Inactivity monitoring started with threshold: \(inactivityThreshold)s")
+    }
+
+    private func stopInactivityMonitoring() {
+        if Thread.isMainThread {
+            inactivityCheckTimer?.invalidate()
+            inactivityCheckTimer = nil
+        } else {
+            DispatchQueue.main.sync {
+                self.inactivityCheckTimer?.invalidate()
+                self.inactivityCheckTimer = nil
+            }
+        }
+    }
+
+    private func checkInactivity() {
+        // Check for actual user input events (keyboard and mouse)
+        let keyboardIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        let mouseClickIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .leftMouseDown)
+        let mouseMovedIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .mouseMoved)
+        let rightClickIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .rightMouseDown)
+        let scrollIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .scrollWheel)
+
+        // Get the minimum idle time from all user input sources
+        let minIdleTime = min(keyboardIdleTime, mouseClickIdleTime, mouseMovedIdleTime, rightClickIdleTime, scrollIdleTime)
+
+        if minIdleTime < 1.0 {
+            // User is active
+            lastActivityTime = Date()
+            if isCurrentlyPulsing {
+                print("[ActivityKeeper] User activity detected (idle: \(minIdleTime)s), stopping pulses")
+                stopPulseTimer()
+                isCurrentlyPulsing = false
+            }
+        } else {
+            // Check if we've been idle long enough
+            let timeSinceLastActivity = Date().timeIntervalSince(lastActivityTime)
+            if timeSinceLastActivity >= inactivityThreshold && !isCurrentlyPulsing && stayActive {
+                print("[ActivityKeeper] Inactivity threshold reached (\(inactivityThreshold)s), starting pulses")
+                isCurrentlyPulsing = true
+                startPulseTimer()
+            }
+        }
+    }
+
+    private func startPulseTimer() {
+        stopPulseTimer()
         pulseUserActivity() // fire immediately
 
         // Use the actual pulse interval as set by the user
-        timer = Timer.scheduledTimer(withTimeInterval: pulseInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor in
+        pulseTimer = Timer.scheduledTimer(withTimeInterval: pulseInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
                 self?.pulseUserActivity()
             }
         }
-        if let t = timer {
+        if let t = pulseTimer {
             RunLoop.main.add(t, forMode: .common)
         }
-        print("[ActivityKeeper] Activity timer started with interval: \(pulseInterval)s")
+        print("[ActivityKeeper] Pulse timer started with interval: \(pulseInterval)s")
     }
 
-    private func stopUserActivityTimer() {
+    private func stopPulseTimer() {
         if Thread.isMainThread {
-            timer?.invalidate()
-            timer = nil
+            pulseTimer?.invalidate()
+            pulseTimer = nil
         } else {
             DispatchQueue.main.sync {
-                self.timer?.invalidate()
-                self.timer = nil
+                self.pulseTimer?.invalidate()
+                self.pulseTimer = nil
             }
         }
     }
