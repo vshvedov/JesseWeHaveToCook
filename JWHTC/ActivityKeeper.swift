@@ -11,6 +11,7 @@ import IOKit.pwr_mgt
 import CoreGraphics
 import AppKit
 import Quartz
+import ApplicationServices
 
 @MainActor
 final class ActivityKeeper: ObservableObject {
@@ -22,6 +23,7 @@ final class ActivityKeeper: ObservableObject {
         static let pulseInterval = "com.jwhtc.pulseInterval"
         static let inactivityThreshold = "com.jwhtc.inactivityThreshold"
         static let showTimer = "com.jwhtc.showTimer"
+        static let useHIDPulses = "com.jwhtc.useHIDPulses"
     }
 
     // UI state - single combined option
@@ -47,6 +49,11 @@ final class ActivityKeeper: ObservableObject {
             UserDefaults.standard.set(showTimer, forKey: DefaultsKeys.showTimer)
         }
     }
+    @Published var useHIDPulses = true { // generate real HID events to reset idle
+        didSet {
+            UserDefaults.standard.set(useHIDPulses, forKey: DefaultsKeys.useHIDPulses)
+        }
+    }
 
     // Internals
     private var idleSleepAssertion: IOPMAssertionID = 0
@@ -57,6 +64,8 @@ final class ActivityKeeper: ObservableObject {
     private var inactivityCheckTimer: Timer?
     private var lastActivityTime: Date = Date()
     private var displayUpdateTimer: Timer?
+    private let jitterPercent: Double = 0.15 // ±15% jitter for pulse interval
+    private var hasPromptedForAXTrust = false
 
     private init() {
         // Load saved settings or use defaults
@@ -91,6 +100,13 @@ final class ActivityKeeper: ObservableObject {
             // Default to showing timer
             showTimer = true
         }
+
+        if UserDefaults.standard.object(forKey: DefaultsKeys.useHIDPulses) != nil {
+            useHIDPulses = UserDefaults.standard.bool(forKey: DefaultsKeys.useHIDPulses)
+        } else {
+            // Enabled by default
+            useHIDPulses = true
+        }
     }
 
     // MARK: - Stay Active (prevents sleep, screensaver, and app inactivity)
@@ -110,6 +126,11 @@ final class ActivityKeeper: ObservableObject {
         startInactivityMonitoring()
         // Always prevent sleep when active mode is on
         beginNoSleep()
+
+        // If HID pulses are enabled by default, ensure we request Accessibility once
+        if useHIDPulses {
+            _ = ensureAccessibility(prompt: true)
+        }
     }
 
     private func endStayActive() {
@@ -225,6 +246,14 @@ final class ActivityKeeper: ObservableObject {
         }
     }
 
+    func setUseHIDPulses(_ enabled: Bool) {
+        useHIDPulses = enabled
+        if enabled {
+            // Prompt once for Accessibility permission
+            ensureAccessibility(prompt: true)
+        }
+    }
+
     // MARK: - Inactivity Monitoring
     private func startInactivityMonitoring() {
         stopInactivityMonitoring()
@@ -255,12 +284,13 @@ final class ActivityKeeper: ObservableObject {
     }
 
     private func checkInactivity() {
-        // Check for actual user input events (keyboard and mouse)
-        let keyboardIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
-        let mouseClickIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .leftMouseDown)
-        let mouseMovedIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .mouseMoved)
-        let rightClickIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .rightMouseDown)
-        let scrollIdleTime = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .scrollWheel)
+        // Check for actual user input events (keyboard and mouse) using HID system state
+        let state: CGEventSourceStateID = .hidSystemState
+        let keyboardIdleTime = CGEventSource.secondsSinceLastEventType(state, eventType: .keyDown)
+        let mouseClickIdleTime = CGEventSource.secondsSinceLastEventType(state, eventType: .leftMouseDown)
+        let mouseMovedIdleTime = CGEventSource.secondsSinceLastEventType(state, eventType: .mouseMoved)
+        let rightClickIdleTime = CGEventSource.secondsSinceLastEventType(state, eventType: .rightMouseDown)
+        let scrollIdleTime = CGEventSource.secondsSinceLastEventType(state, eventType: .scrollWheel)
 
         // Get the minimum idle time from all user input sources
         let minIdleTime = min(keyboardIdleTime, mouseClickIdleTime, mouseMovedIdleTime, rightClickIdleTime, scrollIdleTime)
@@ -291,17 +321,8 @@ final class ActivityKeeper: ObservableObject {
     private func startPulseTimer() {
         stopPulseTimer()
         pulseUserActivity() // fire immediately
-
-        // Use the actual pulse interval as set by the user
-        pulseTimer = Timer.scheduledTimer(withTimeInterval: pulseInterval, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                self?.pulseUserActivity()
-            }
-        }
-        if let t = pulseTimer {
-            RunLoop.main.add(t, forMode: .common)
-        }
-        print("[ActivityKeeper] Pulse timer started with interval: \(pulseInterval)s")
+        scheduleNextPulse()
+        print("[ActivityKeeper] Pulse timer started with base interval: \(pulseInterval)s (±\(Int(jitterPercent * 100))% jitter)")
     }
 
     private func stopPulseTimer() {
@@ -375,6 +396,15 @@ final class ActivityKeeper: ObservableObject {
             )
             print("[ActivityKeeper] ProcessInfo activity refreshed")
         }
+
+        // 4. Generate optional HID activity to reset app idle timers
+        if useHIDPulses {
+            if ensureAccessibility(prompt: false) {
+                postHIDMousePulse()
+            } else {
+                print("[ActivityKeeper] Skipping HID pulse: Accessibility not granted")
+            }
+        }
     }
 
     // MARK: - Display Update Timer
@@ -399,6 +429,76 @@ final class ActivityKeeper: ObservableObject {
             DispatchQueue.main.sync {
                 self.displayUpdateTimer?.invalidate()
                 self.displayUpdateTimer = nil
+            }
+        }
+    }
+
+    // MARK: - Pulse scheduling with jitter
+    private func scheduleNextPulse() {
+        let jitterFactor = 1.0 + Double.random(in: -jitterPercent...jitterPercent)
+        let interval = max(1.0, pulseInterval * jitterFactor)
+        pulseTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                self.pulseUserActivity()
+                // Chain the next pulse only if still pulsing
+                if self.isCurrentlyPulsing {
+                    self.scheduleNextPulse()
+                }
+            }
+        }
+        if let t = pulseTimer {
+            RunLoop.main.add(t, forMode: .common)
+        }
+        print("[ActivityKeeper] Next pulse in ~\(String(format: "%.1f", interval))s")
+    }
+
+    // MARK: - Accessibility & HID helpers
+    private func ensureAccessibility(prompt: Bool) -> Bool {
+        let trusted = AXIsProcessTrusted()
+        if !trusted && prompt && !hasPromptedForAXTrust {
+            hasPromptedForAXTrust = true
+            let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+            _ = AXIsProcessTrustedWithOptions(options)
+            print("[ActivityKeeper] Requested Accessibility permission. Please enable in System Settings → Privacy & Security → Accessibility")
+        }
+        return AXIsProcessTrusted()
+    }
+
+    private func postHIDMousePulse() {
+        // Try to post a mouse moved event at the current position.
+        let state: CGEventSourceStateID = .hidSystemState
+        let beforeIdle = CGEventSource.secondsSinceLastEventType(state, eventType: .mouseMoved)
+
+        guard let currentLoc = CGEvent(source: nil)?.location else {
+            print("[ActivityKeeper] Could not get current mouse location for HID pulse")
+            return
+        }
+
+        func postMouseMove(at point: CGPoint) {
+            if let move = CGEvent(mouseEventSource: nil, mouseType: .mouseMoved, mouseCursorPosition: point, mouseButton: .left) {
+                move.setIntegerValueField(.mouseEventDeltaX, value: 0)
+                move.setIntegerValueField(.mouseEventDeltaY, value: 0)
+                move.post(tap: .cghidEventTap)
+            }
+        }
+
+        postMouseMove(at: currentLoc)
+
+        // Check shortly after whether idle was reset; if not, do a minimal jiggle
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            let afterIdle = CGEventSource.secondsSinceLastEventType(state, eventType: .mouseMoved)
+            if afterIdle <= beforeIdle { // no reset observed
+                // Perform a minimal 1px jiggle and return
+                let jiggle = CGPoint(x: currentLoc.x + 1, y: currentLoc.y)
+                postMouseMove(at: jiggle)
+                // Move back
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+                    postMouseMove(at: currentLoc)
+                }
+                print("[ActivityKeeper] HID pulse used 1px jiggle fallback")
+            } else {
+                print("[ActivityKeeper] HID pulse (same-position) reset idle successfully")
             }
         }
     }

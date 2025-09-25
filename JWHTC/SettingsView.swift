@@ -82,6 +82,23 @@ struct SettingsView: View {
                             .toggleStyle(.switch)
                             .controlSize(.small)
                         }
+
+                        HStack {
+                            Toggle(
+                                "Generate HID activity",
+                                isOn: Binding(
+                                    get: { keeper.useHIDPulses },
+                                    set: { keeper.setUseHIDPulses($0) }
+                                )
+                            )
+                            .toggleStyle(.switch)
+                            .controlSize(.small)
+                            .help("Posts 1px mouse-move events to reset idle in apps like Slack/Teams. Requires enabling Accessibility for this app.")
+                        }
+
+                        Text("Requires: System Settings → Privacy & Security → Accessibility")
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                     }
 
                     // Inactivity Threshold Section
@@ -170,6 +187,7 @@ struct SettingsView: View {
                     Button("Reset to Default") {
                         keeper.setPulseInterval(20)
                         keeper.setInactivityThreshold(5)
+                        keeper.setUseHIDPulses(true)
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.blue)
@@ -193,7 +211,7 @@ struct SettingsView: View {
             }
             .background(Color(NSColor.windowBackgroundColor))
         }
-        .frame(width: 420, height: 550)
+        .frame(width: 420, height: 600)
         .fixedSize()
     }
 
